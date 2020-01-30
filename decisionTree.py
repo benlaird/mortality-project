@@ -39,6 +39,7 @@ codebooks_dict = {}
 with open('codebooks.json', 'r') as f:
     codebooks_dict = json.load(f)
 
+
 def read_mortality_data():
     global nhanes_2013_df
 
@@ -86,7 +87,6 @@ def read_mortality_data():
     # new_t = [np.subtract( t, (1, 0))
     cspecs = [(t1 - 1, t2) for (t1, t2) in t]
 
-
     friendly_names = [('RIDAGEYR', 'Age in years'), ('RIDRETH3', 'Race'),
                       ('MIAPROXY', 'Proxy used in MEC Interview'),
                       ('WTINT2YR', 'Interview weight'),
@@ -128,8 +128,8 @@ def read_and_merge_data(file):
     # Convert sequence number to int
     new_df = new_df.astype({'seqn': 'int'})
     nhanes_2013_df = pd.merge(nhanes_2013_df, new_df, how='left',
-                         left_on=['seqn'],
-                         right_on=['seqn'])
+                              left_on=['seqn'],
+                              right_on=['seqn'])
     return
 
 
@@ -137,7 +137,6 @@ def read_and_merge_data(file):
 # nhanes_2013_df = read_and_merge_data(nhanes_2013_df, 'HDL_H.txt')
 
 def merge_all_data():
-
     debug = False
     count = 0
     start = 60
@@ -217,6 +216,7 @@ def smote_classify(X, y):
 
 
 def train_model():
+    smote = False
     # Drop predictor dependent columns from training set
     train_cols_to_drop = ['mortstat', 'ucod_leading', 'permth_int', 'permth_exm', 'diabetes',
                           'hyperten']
@@ -226,7 +226,10 @@ def train_model():
     # Split first
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=123)
 
-    X_smote, y_smote = smote_classify(X_train, y_train)
+    if smote:
+        X_smote, y_smote = smote_classify(X_train, y_train)
+    else:
+        X_smote, y_smote = (X_train, y_train)
 
     tree_clf = DecisionTreeClassifier(criterion='gini', max_depth=5)
     tree_clf.fit(X_smote, y_smote)
@@ -235,9 +238,8 @@ def train_model():
     return estimator, X_train, X_test, y_train, y_test
 
 
-def create_png(filename, X_train, estimator):
+def get_feature_names(X_train):
     feat_prefix_pat = re.compile('([a-zA-Z0-9]+)')
-
     # If True, get friendly names of each column in training set
     eng_feat = True
     feat_names = []
@@ -255,6 +257,13 @@ def create_png(filename, X_train, estimator):
     else:
         feat_names = X_train.columns
 
+    return feat_names
+
+
+def create_png(filename, X_train, estimator):
+
+    feat_names = get_feature_names(X_train)
+
     # Export as dot file
     export_graphviz(estimator, out_file=filename + '.dot',
                     feature_names=feat_names,
@@ -266,7 +275,7 @@ def create_png(filename, X_train, estimator):
     graph.write_png(filename + '.png')
 
     ## Display in jupyter notebook
-    #from IPython.display import Image
+    # from IPython.display import Image
     # Image(filename='tree.png')
 
 
@@ -275,6 +284,42 @@ from sklearn.datasets import make_classification
 from collections import Counter
 
 
+def print_test_tree(in_file, out_file, X_test, y_test, clf):
+    feat_names = get_feature_names(X_test)
+
+
+    (graph,) = pydot.graph_from_dot_file(in_file)
+
+    # empty all nodes, i.e.set color to white and number of samples to zero
+    for node in graph.get_node_list():
+        if node.get_attributes().get('label') is None:
+            continue
+        if 'samples = ' in node.get_attributes()['label']:
+            labels = node.get_attributes()['label'].split('\\n')
+            for i, label in enumerate(labels):
+                if label.startswith('samples = '):
+                    labels[i] = 'samples = 0'
+            node.set('label', '\\n'.join(labels))
+            node.set_fillcolor('white')
+
+    samples = y_test
+    decision_paths = clf.decision_path(X_test)
+
+    for decision_path in decision_paths:
+        for n, node_value in enumerate(decision_path.toarray()[0]):
+            if node_value == 0:
+                continue
+            node = graph.get_node(str(n))[0]
+            node.set_fillcolor('green')
+            labels = node.get_attributes()['label'].split('\\n')
+            for i, label in enumerate(labels):
+                if label.startswith('samples = '):
+                    labels[i] = 'samples = {}'.format(int(label.split('=')[1]) + 1)
+
+            node.set('label', '\\n'.join(labels))
+        print(f"leaf node: {labels}")
+    graph.write_png(out_file)
+
 
 def main():
     read_mortality_data()
@@ -282,7 +327,12 @@ def main():
 
     drop_interpolate()
 
+    print(f"Len of full data frame: {len(nhanes_2013_df)}")
+
     tree_clf, X_train, X_test, y_train, y_test = train_model()
+    print(f"Len of X_train: {len(X_train)} len of X_test: {len(X_test)}")
+
+    input("Continue?")
 
     # Train set predictions
     print("*** Training: ***")
@@ -295,12 +345,12 @@ def main():
 
     # Test set predictions
     print("*** Testing: ***")
-    pred = tree_clf.predict(X_test)
+    test_pred = tree_clf.predict(X_test)
     # Confusion matrix and classification report
-    print(confusion_matrix(y_test, pred))
-    print(classification_report(y_test, pred))
+    print(confusion_matrix(y_test, test_pred))
+    print(classification_report(y_test, test_pred))
 
-    create_png("test_tree", X_test, tree_clf)
-
+    print_test_tree("train_tree.dot", "test_tree.png", X_test, y_test, tree_clf)
 
 main()
+
