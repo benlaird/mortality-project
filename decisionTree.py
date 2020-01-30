@@ -7,10 +7,13 @@ from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
 from sklearn.tree import export_graphviz
 
 import pydot
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 import json
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn import preprocessing
+from scipy.special import expit
 
 from sklearn.impute import SimpleImputer
 
@@ -23,6 +26,10 @@ from yellowbrick.classifier import classification_report as yb_class_report
 # nhanes_2013_df = pd.DataFrame()
 from tabulate import tabulate
 
+import xgboost as xgb
+from sklearn.metrics import precision_score, recall_score, accuracy_score
+
+_hyper = {'criterion': 'entropy', 'max_depth': 10, 'min_samples_split': 2}
 
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 500)
@@ -43,7 +50,6 @@ hanes_2013_files = ['ALB_CR_H.txt', 'ALDS_H.txt', 'ALD_H.txt', 'AMDGDS_H.txt', '
                     'UTASS_H.txt', 'UTAS_H.txt', 'UVOCS_H.txt', 'UVOC_H.txt', 'VID_H.txt', 'VITB12_H.txt',
                     'VNAS_H.txt', 'VNA_H.txt', 'VOCWBS_H.txt', 'VOCWB_H.txt', ]
 
-"""
 hanes_2013_questionnaire_files = ['ACQ_H.txt', 'ALQ_H.txt', 'BPQ_H.txt', 'CBQ_H.txt', 'CDQ_H.txt', 'CFQ_H.txt',
                                   'CKQ_H.txt', 'CSQ_H.txt', 'DBQ_H.txt', 'DEQ_H.txt', 'DIQ_H.txt', 'DLQ_H.txt',
                                   'DPQ_H.txt', 'DUQ_H.txt', 'ECQ_H.txt', 'FSQ_H.txt', 'HEQ_H.txt', 'HIQ_H.txt',
@@ -54,18 +60,18 @@ hanes_2013_questionnaire_files = ['ACQ_H.txt', 'ALQ_H.txt', 'BPQ_H.txt', 'CBQ_H.
                                   'SMQFAM_H.txt', 'SMQRTU_H.txt', 'SMQSHS_H.txt', 'SMQ_H.txt', 'SXQ_H.txt', 'VTQ_H.txt',
                                   'WHQMEC_H.txt', 'WHQ_H.txt',
                                   ]
-"""
 
-hanes_2013_questionnaire_files = ['ACQ_H.txt', 'ALQ_H.txt', 'BPQ_H.txt', 'CBQ_H.txt', 'CDQ_H.txt', 'CFQ_H.txt',
-                                  'CKQ_H.txt', 'CSQ_H.txt', 'DBQ_H.txt', 'DEQ_H.txt', 'DIQ_H.txt', 'DLQ_H.txt',
-                                  'DPQ_H.txt', 'DUQ_H.txt', 'ECQ_H.txt', 'FSQ_H.txt', 'HEQ_H.txt', 'HIQ_H.txt',
-                                  'HOQ_H.txt', 'HSQ_H.txt', 'HUQ_H.txt', 'IMQ_H.txt', 'INQ_H.txt', 'KIQ_U_H.txt',
-                                  'MCQ_H.txt', 'OCQ_H.txt', 'OHQ_H.txt', 'OSQ_H.txt', 'PAQ_H.txt', 'PFQ_H.txt',
-                                  'PUQMEC_H.txt', 'RHQ_H.txt', 'RXQASA_H.txt', 'RXQ_RX_H.txt',
-                                  'SLQ_H.txt',
-                                  'SMQFAM_H.txt', 'SMQRTU_H.txt', 'SMQSHS_H.txt', 'SMQ_H.txt', 'SXQ_H.txt', 'VTQ_H.txt',
-                                  'WHQMEC_H.txt', 'WHQ_H.txt',
-                                  ]
+top50_features = ['seqn', 'mortstat', 'ucod_leading', 'permth_int', 'permth_exm', 'diabetes', 'hyperten',
+                  'lbxsbu_biopro_h', 'lbdscrsi_biopro_h', 'lbxscr_biopro_h', 'urdact_alb_cr_h', 'lbdsbusi_biopro_h',
+                  'lbdsalsi_biopro_h', 'lbxhct_cbc_h', 'lbxhgb_cbc_h', 'orxh62_orhpv_h', 'lbdhddsi_hdl_h',
+                  'lbxlypct_cbc_h', 'pfq061m_pfq_h', 'pfq090_pfq_h', 'ridageyr_demo_h', 'lbdscasi_biopro_h',
+                  'dbq301_dbq_h', 'lbxsc3si_biopro_h', 'lbxsca_biopro_h', 'lbxsck_biopro_h', 'lbxsf6si_folfms_h',
+                  'lbxsossi_biopro_h', 'dlq080_dlq_h', 'pfq061f_pfq_h', 'lbxmmasi_mma_h', 'orxh64_orhpv_h',
+                  'lbdldlsi_trigly_h', 'pfq061e_pfq_h', 'smq800_smqrtu_h', 'hsq500_hsq_h', 'lbdb12_vitb12_h',
+                  'lbxsal_biopro_h', 'mcq230b_mcq_h', 'pfq061h_pfq_h', 'hud080_huq_h', 'lbxrbcsi_cbc_h',
+                  'lbxin_ins_h', 'lbxtc_tchol_h', 'lbxsclsi_biopro_h', 'lbdschsi_biopro_h', 'pfq063d_pfq_h',
+                  'mcq050_mcq_h', 'pfq054_pfq_h', 'lbxsch_biopro_h', 'lbdstpsi_biopro_h', 'urdflow2_ucflow_h',
+                  'lbdlymno_cbc_h', 'lbdb12si_vitb12_h', 'pfq061t_pfq_h', 'orxh26_orhpv_h', 'cfdds_cfq_h', ]
 
 codebooks_dict = {}
 with open('combined_codebook.json', 'r') as f:
@@ -215,7 +221,10 @@ def drop_interpolate(df):
     # nhanes_2013_df = nhanes_2013_df.dropna(axis=1, how='all')
     df.dropna(axis=1, how='all', inplace=True)
 
-    #TODO - look at whether dropping object-type columns can be avoided
+    # Keep only the top 50 important features
+    df = df[top50_features]
+
+    # TODO - look at whether dropping object-type columns can be avoided
     df = df.select_dtypes(exclude=['object'])
 
     df = impute_mean(df)
@@ -260,7 +269,7 @@ def train_model(df, smote=False):
     else:
         X_smote, y_smote = (X_train, y_train)
 
-    tree_clf = DecisionTreeClassifier(criterion='gini', max_depth=7)
+    tree_clf = DecisionTreeClassifier(criterion=_hyper['criterion'], max_depth=_hyper['max_depth'])
     tree_clf.fit(X_smote, y_smote)
 
     estimator = tree_clf
@@ -350,7 +359,7 @@ def print_test_tree(in_file, out_file, X_test, y_test, clf):
 
 def plot_feature_importances(model, X_train):
     n_features = X_train.shape[1]
-    plt.figure(figsize=(8,8))
+    plt.figure(figsize=(8, 8))
     plt.barh(range(n_features), model.feature_importances_, align='center')
     plt.yticks(np.arange(n_features), X_train.columns.values)
     plt.xlabel('Feature importance')
@@ -358,8 +367,9 @@ def plot_feature_importances(model, X_train):
 
 
 def bagging_classifier(X_train, y_train, X_test, y_test):
-    bagged_tree = BaggingClassifier(DecisionTreeClassifier(criterion='gini', max_depth=5),
-                                    n_estimators=20)
+    bagged_tree = BaggingClassifier(
+        DecisionTreeClassifier(criterion=_hyper['criterion'], max_depth=_hyper['max_depth']),
+        n_estimators=20)
 
     # Fit to the training data
     bagged_tree.fit(X_train, y_train)
@@ -387,14 +397,106 @@ def yb_classification_report(note, tree_clf, X_test, y_test):
     visualizer.show()
 
 
+def grid_search(X_train, y_train):
+    # Results without smote:  {'criterion': 'entropy', 'max_depth': 10, 'min_samples_split': 5}
+    # Results with smote:     {'criterion': 'entropy', 'max_depth': 10, 'min_samples_split': 2}
+    # Results with smote & top 50:   {'criterion': 'entropy', 'max_depth': 10, 'min_samples_split': 2}
+    clf = DecisionTreeClassifier()
+
+    param_grid = {
+        'criterion': ['gini', 'entropy'],
+        'max_depth': [2, 5, 10],
+        'min_samples_split': [2, 5, 10, 15, 20]
+    }
+
+    gs_tree = GridSearchCV(clf, param_grid, cv=3)
+    gs_tree.fit(X_train, y_train)
+
+    print(gs_tree.best_params_)
+
+
+def forest_feature_importance(forest, X_train):
+    importances = forest.feature_importances_
+    std = np.std([tree.feature_importances_ for tree in forest.estimators_],
+                 axis=0)
+    indices = np.argsort(importances)[::-1]
+
+    # Print the feature ranking
+    print("Feature ranking:")
+
+    for f in range(X_train.shape[1]):
+        print("%d. feature %d (%f)" % (f + 1, indices[f], importances[indices[f]]))
+
+    # Plot the feature importances of the forest
+    plt.figure()
+    plt.title("Feature importances")
+    plt.bar(range(X_train.shape[1]), importances[indices],
+            color="r", yerr=std[indices], align="center")
+    plt.xticks(range(X_train.shape[1]), indices)
+    plt.xlim([-1, X_train.shape[1]])
+    plt.show()
+
+
+def forest_feature_importance_v2(forest, X_train):
+    feature_importances = pd.DataFrame(forest.feature_importances_,
+                                       index=X_train.columns,
+                                       columns=['importance']).sort_values('importance', ascending=False)
+    print(tabulate(feature_importances, headers='keys', tablefmt='psql'))
+
+
+def log_regress(X_train, y_train, X_test, y_test):
+    clf = LogisticRegression()
+
+    X_scaled = preprocessing.scale(X_train)
+    clf.fit(X_scaled, y_train)
+
+    print(clf.coef_)
+    print(clf.intercept_)
+    y_pred = clf.predict(X_test)
+    c_m = confusion_matrix(y_test, y_pred)
+    print(c_m)
+    yb_classification_report("Logistic regression", clf, X_test, y_test)
+    return
+
+    plt.figure(1, figsize=(4, 3))
+    plt.clf()
+    plt.scatter(X_train.ravel(), y_train, color='black', zorder=20)
+
+    loss = expit(X_test * clf.coef_ + clf.intercept_).ravel()
+    plt.plot(X_test, loss, color='red', linewidth=3)
+    plt.show()
+
+
+def xg_boost(X_train, y_train, X_test, y_test):
+    param = {
+        'eta': 0.3,
+        'max_depth': _hyper['max_depth'],
+        'objective': 'multi:softprob',
+        'num_class': 2}
+
+    steps = 20  # The number of training iterations
+    D_train = xgb.DMatrix(X_train, label=y_train)
+    D_test = xgb.DMatrix(X_test, label=y_test)
+
+    model = xgb.train(param, D_train, steps)
+
+    preds = model.predict(D_test)
+    best_preds = np.asarray([np.argmax(line) for line in preds])
+
+    print("Precision = {}".format(precision_score(y_test, best_preds, average='macro')))
+    print("Recall = {}".format(recall_score(y_test, best_preds, average='macro')))
+    print("Accuracy = {}".format(accuracy_score(y_test, best_preds)))
+
+
+steps = 20  # The number of training iterations
 def main():
     # global nhanes_2013_df
     hanes_2013_dir = 'nhanes-2013/'
     hanes_2013_questionnaire_dir = 'nhanes-2013-questionnaire/'
 
     mort_df = read_mortality_data()
-    # nhanes_2013_df = merge_all_data(hanes_2013_dir, hanes_2013_files, mort_df)
-    nhanes_2013_df = merge_all_data(hanes_2013_questionnaire_dir,  hanes_2013_questionnaire_files, mort_df)
+    nhanes_2013_df = merge_all_data(hanes_2013_dir, hanes_2013_files, mort_df)
+    nhanes_2013_df = merge_all_data(hanes_2013_questionnaire_dir, hanes_2013_questionnaire_files, nhanes_2013_df)
 
     # print(tabulate(nhanes_2013_df, headers='keys', tablefmt='psql'))
     # print(nhanes_2013_df.dtypes)
@@ -406,6 +508,10 @@ def main():
     print(f"After drop: {nhanes_2013_df.shape}")
 
     tree_clf, X_train, X_test, y_train, y_test = train_model(nhanes_2013_df, smote=True)
+
+    # Ran grid search already
+    # grid_search(X_train, y_train)
+
 
     print(f"Len of full data frame: {len(nhanes_2013_df)}")
     print(f"Len of X_train: {len(X_train)} len of X_test: {len(X_test)}")
@@ -429,10 +535,18 @@ def main():
     print_test_tree("train_tree.dot", "test_tree.png", X_test, y_test, tree_clf)
     print(f"Len of X_train: {len(X_train)} len of X_test: {len(X_test)}")
 
-    bagging_classifier(X_train, y_train, X_test, y_test)
-    forest = random_forest_classifier(X_train, y_train, X_test, y_test)
+    # log_regress(X_train, y_train, X_test, y_test)
+    xg_boost(X_train, y_train, X_test, y_test)
 
-    yb_classification_report("Forest classification", forest, X_test, y_test)
+    random_forest = False
+    if random_forest:
+        bagging_classifier(X_train, y_train, X_test, y_test)
+        forest = random_forest_classifier(X_train, y_train, X_test, y_test)
+
+        # Ran once
+        # forest_feature_importance_v2(forest, X_train)
+
+        yb_classification_report("Forest classification", forest, X_test, y_test)
 
 
 main()
