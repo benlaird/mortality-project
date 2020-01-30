@@ -18,6 +18,16 @@ hanes_2013_files = ['ALB_CR_H', 'ALDS_H', 'ALD_H', 'AMDGDS_H', 'AMDGYD_H', 'APOB
                     'UTASS_H', 'UTAS_H', 'UVOCS_H', 'UVOC_H', 'VID_H', 'VITB12_H',
                     'VNAS_H', 'VNA_H', 'VOCWBS_H', 'VOCWB_H', ]
 
+hanes_2013_questionnaire_files = ['ACQ_H', 'ALQ_H', 'BPQ_H', 'CBQ_H', 'CDQ_H', 'CFQ_H',
+                                  'CKQ_H', 'CSQ_H', 'DBQ_H', 'DEQ_H', 'DIQ_H', 'DLQ_H',
+                                  'DPQ_H', 'DUQ_H', 'ECQ_H', 'FSQ_H', 'HEQ_H', 'HIQ_H',
+                                  'HOQ_H', 'HSQ_H', 'HUQ_H', 'IMQ_H', 'INQ_H', 'KIQ_U_H',
+                                  'MCQ_H', 'OCQ_H', 'OHQ_H', 'OSQ_H', 'PAQ_H', 'PFQ_H',
+                                  'PUQMEC_H', 'RHQ_H', 'RXQASA_H', 'RXQ_RX_H',
+                                  'SLQ_H',
+                                  'SMQFAM_H', 'SMQRTU_H', 'SMQSHS_H', 'SMQ_H', 'SXQ_H', 'VTQ_H',
+                                  'WHQMEC_H', 'WHQ_H',
+                                  ]
 
 def get_soup_page(url):
     headers = {
@@ -52,7 +62,7 @@ def get_code_book(soup, code_book, fle, fle_code_book):
     return code_book, fle_code_book
 
 
-def get_all_code_books():
+def get_all_code_books(files, out_file):
     url_prefix = 'https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/'
     url_postfix = '.htm#Codebook'
 
@@ -69,13 +79,14 @@ def get_all_code_books():
 
     fle_code_book = {}
 
-    for fle in hanes_2013_files:
+    for fle in files:
+        print(f"File is: {fle}")
         url = url_prefix + fle + url_postfix
         soup = get_soup_page(url)
         code_book, fle_code_book = get_code_book(soup, code_book, fle, fle_code_book)
 
     print(code_book)
-    with open('codebooksV2.json', 'w') as fp:
+    with open(out_file, 'w') as fp:
         json.dump(code_book, fp, indent=4, separators=(',', ': '))
 
     # Remove singular values from the file_code_book
@@ -89,4 +100,4 @@ def get_all_code_books():
         json.dump(fle_code_book, fp, indent=4, separators=(',', ': '))
 
 
-get_all_code_books()
+get_all_code_books(hanes_2013_questionnaire_files, "qcode_book.json")
