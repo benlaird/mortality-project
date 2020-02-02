@@ -1,0 +1,50 @@
+	importance	desc
+ridageyr_demo_h	0.0822863675450689	Age in years at screening 
+whd130_whq_h	0.07685472074046165	Self-reported height - age 25 (inches)
+pfq063b_pfq_h	0.06050099459000591	Health problems causing difficulty
+pfq061m_pfq_h	0.046691391870529335	Standing for long periods difficulty
+pfq061f_pfq_h	0.045924437531722456	House chore difficulty
+ohq033_ohq_h	0.04585388485380152	Main reason for last dental visit
+pfq061t_pfq_h	0.04419808570305701	Push or pull large objects difficulty
+dbq301_dbq_h	0.02457072462968049	Community/Government meals delivered
+pfq054_pfq_h	0.024163808972036068	Need special equipment to walk
+pfq061n_pfq_h	0.023985303658723436	Sitting for long periods difficulty
+hiq105_hiq_h	0.023139905554891173	Insurance card available or not
+pfq090_pfq_h	0.023061412271797376	Require special healthcare equipment
+pfq061b_pfq_h	0.021988537294222232	Walking for a quarter mile difficulty
+rhq420_rhq_h	0.021257925286503453	Ever taken birth control pills?
+cfdcir_cfq_h	0.020547158912892046	CERAD: Intrusion word count Recall
+dmdhhsze_demo_h	0.020429170871047463	# of adults 60 years or older in HH
+dlq080_dlq_h	0.02039733594117759	Have difficulty doing errands alone ?
+orxgh_orhpv_h	0.02016923685881654	HPV High Globulin Band result
+inq020_inq_h	0.020036372142144983	Income from wages/salaries
+pfq061c_pfq_h	0.019635024936766325	Walking up ten steps difficulty
+bpq040a_bpq_h	0.01944504362271056	Taking prescription for hypertension
+pfq061s_pfq_h	0.018770745947974163	Leisure activity at home difficulty
+mcq084_mcq_h	0.01658307646224535	Difficulties in thinking or remembering
+dlq050_dlq_h	0.015308635433572868	Have serious difficulty walking ?
+cfalang_cfq_h	0.015274570362409564	Language - Cognitive Functioning
+pfq051_pfq_h	0.014634030124402127	Limited in amount of work you can do
+cfdccs_cfq_h	0.01440416549810743	CERAD: Completion Status
+inq030_inq_h	0.014395375140412227	Income from Social Security or RR
+sxq700_sxq_h	0.013495046315379091	Ever had vaginal sex with a man
+duq370_duq_h	0.013452459212601978	Ever use a needle to inject illegal drug
+paq665_paq_h	0.012102810245557453	Moderate recreational activities
+dbq330_dbq_h	0.01199310590885203	Eat meals at Community/Senior center
+smq858_smqshs_h	0.011736739140528196	Last 7-d at job someone smoked indoors?
+bpq020_bpq_h	0.011324914648093615	Ever told you had high blood pressure
+sxd021_sxq_h	0.011178791501277634	Ever had vaginal, anal, or oral sex
+sxq709_sxq_h	0.01113184265733748	Ever had any kind of sex with a woman
+sxq260_sxq_h	0.011087160606119273	Doctor ever told you had genital herpes
+pfq059_pfq_h	0.010930678865992624	Physical, mental, emotional limitations
+ocq260_ocq_h	0.009784757981035917	Description of job/work situation
+aialanga_demo_h	0.008858225612250265	Language of ACASI Interview
+duq240_duq_h	0.008560650073112819	Ever used cocaine/heroin/methamphetamine
+urxutri_trich_h	0.007609349088574183	Trichomonas, urine
+smq856_smqshs_h	0.00672230583250678	Last 7-d worked at job not at home?
+ocd150_ocq_h	0.005626444503266485	Type of work done last week
+lbxhe2_hsv_h	0.005614263346061195	Herpes Simplex Virus Type 2
+auq138_csq_h	0.005044650746956117	Ever had a tube placed in your ear? 
+sxq265_sxq_h	0.004131205086428384	Doctor ever told you had genital warts
+sxq270_sxq_h	0.003052968388033608	Doctor ever told you had gonorrhea
+sxq272_sxq_h	0.002054187482854595	Doctor ever told you had chlamydia
