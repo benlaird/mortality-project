@@ -1,5 +1,6 @@
 import re
 import urllib
+from enum import Enum
 
 import pandas as pd
 import numpy as np
@@ -7,7 +8,7 @@ from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
 from sklearn.tree import export_graphviz
 
 import pydot
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, KFold
 import json
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from sklearn.tree import DecisionTreeClassifier
@@ -21,15 +22,18 @@ from imblearn.combine import SMOTETomek
 import matplotlib.pyplot as plt
 
 from yellowbrick.datasets import load_credit
-from yellowbrick.classifier import classification_report as yb_class_report
+from yellowbrick.classifier import classification_report as yb_class_report, ClassificationReport
+from yellowbrick.classifier import ConfusionMatrix
 
 # nhanes_2013_df = pd.DataFrame()
 from tabulate import tabulate
 
 import xgboost as xgb
 from sklearn.metrics import precision_score, recall_score, accuracy_score
+import seaborn as sn
 
-_hyper = {'criterion': 'entropy', 'max_depth': 10, 'min_samples_split': 2}
+# _hyper = {'criterion': 'entropy', 'max_depth': 10, 'min_samples_split': 2}
+_hyper = {'criterion': 'gini', 'max_depth': 10, 'min_samples_split': 2}
 
 pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 500)
@@ -50,28 +54,21 @@ hanes_2013_files = ['ALB_CR_H.txt', 'ALDS_H.txt', 'ALD_H.txt', 'AMDGDS_H.txt', '
                     'UTASS_H.txt', 'UTAS_H.txt', 'UVOCS_H.txt', 'UVOC_H.txt', 'VID_H.txt', 'VITB12_H.txt',
                     'VNAS_H.txt', 'VNA_H.txt', 'VOCWBS_H.txt', 'VOCWB_H.txt', ]
 
+# TODO there seems to be a problem merging this file:  'RXQ_RX_H.txt'  so I removed it
 hanes_2013_questionnaire_files = ['ACQ_H.txt', 'ALQ_H.txt', 'BPQ_H.txt', 'CBQ_H.txt', 'CDQ_H.txt', 'CFQ_H.txt',
                                   'CKQ_H.txt', 'CSQ_H.txt', 'DBQ_H.txt', 'DEQ_H.txt', 'DIQ_H.txt', 'DLQ_H.txt',
                                   'DPQ_H.txt', 'DUQ_H.txt', 'ECQ_H.txt', 'FSQ_H.txt', 'HEQ_H.txt', 'HIQ_H.txt',
                                   'HOQ_H.txt', 'HSQ_H.txt', 'HUQ_H.txt', 'IMQ_H.txt', 'INQ_H.txt', 'KIQ_U_H.txt',
                                   'MCQ_H.txt', 'OCQ_H.txt', 'OHQ_H.txt', 'OSQ_H.txt', 'PAQ_H.txt', 'PFQ_H.txt',
-                                  'PUQMEC_H.txt', 'RHQ_H.txt', 'RXQASA_H.txt', 'RXQ_RX_H.txt',
+                                  'PUQMEC_H.txt', 'RHQ_H.txt', 'RXQASA_H.txt',
                                   'SLQ_H.txt',
                                   'SMQFAM_H.txt', 'SMQRTU_H.txt', 'SMQSHS_H.txt', 'SMQ_H.txt', 'SXQ_H.txt', 'VTQ_H.txt',
-                                  'WHQMEC_H.txt', 'WHQ_H.txt',
+                                  'WHQMEC_H.txt', 'WHQ_H.txt'
                                   ]
 
-top50_features = ['seqn', 'mortstat', 'ucod_leading', 'permth_int', 'permth_exm', 'diabetes', 'hyperten',
-                  'lbxsbu_biopro_h', 'lbdscrsi_biopro_h', 'lbxscr_biopro_h', 'urdact_alb_cr_h', 'lbdsbusi_biopro_h',
-                  'lbdsalsi_biopro_h', 'lbxhct_cbc_h', 'lbxhgb_cbc_h', 'orxh62_orhpv_h', 'lbdhddsi_hdl_h',
-                  'lbxlypct_cbc_h', 'pfq061m_pfq_h', 'pfq090_pfq_h', 'ridageyr_demo_h', 'lbdscasi_biopro_h',
-                  'dbq301_dbq_h', 'lbxsc3si_biopro_h', 'lbxsca_biopro_h', 'lbxsck_biopro_h', 'lbxsf6si_folfms_h',
-                  'lbxsossi_biopro_h', 'dlq080_dlq_h', 'pfq061f_pfq_h', 'lbxmmasi_mma_h', 'orxh64_orhpv_h',
-                  'lbdldlsi_trigly_h', 'pfq061e_pfq_h', 'smq800_smqrtu_h', 'hsq500_hsq_h', 'lbdb12_vitb12_h',
-                  'lbxsal_biopro_h', 'mcq230b_mcq_h', 'pfq061h_pfq_h', 'hud080_huq_h', 'lbxrbcsi_cbc_h',
-                  'lbxin_ins_h', 'lbxtc_tchol_h', 'lbxsclsi_biopro_h', 'lbdschsi_biopro_h', 'pfq063d_pfq_h',
-                  'mcq050_mcq_h', 'pfq054_pfq_h', 'lbxsch_biopro_h', 'lbdstpsi_biopro_h', 'urdflow2_ucflow_h',
-                  'lbdlymno_cbc_h', 'lbdb12si_vitb12_h', 'pfq061t_pfq_h', 'orxh26_orhpv_h', 'cfdds_cfq_h', ]
+top_n_features = pd.read_csv('topNFeatures.tsv', sep='\t')
+top_n_features = top_n_features.iloc[:, 0]
+print(f"top N features: {top_n_features}")
 
 codebooks_dict = {}
 with open('combined_codebook.json', 'r') as f:
@@ -155,6 +152,9 @@ def read_and_merge_data(dir_prefix, file, df):
             if debug:
                 print(f"dropping: {c}")
             new_df.drop(labels=c, axis=1, inplace=True)
+        # Drop all HPV columns except orggh
+        if c in codebooks_dict and c.startswith('orx') and c != "orxgh":
+            new_df.drop(labels=c, axis=1, inplace=True)
 
     # Prefix all the columns except seqn with the file prefix
     key_text = file_prefix_pat.search(file)
@@ -168,13 +168,14 @@ def read_and_merge_data(dir_prefix, file, df):
     df = pd.merge(df, new_df, how='left',
                   left_on=['seqn'],
                   right_on=['seqn'])
+    print(f"After merging file: {file} shape is: {df.shape}")
     return df
 
 
 # nhanes_2013_df = read_and_merge_data(nhanes_2013_df, 'DEMO_H.txt')
 # nhanes_2013_df = read_and_merge_data(nhanes_2013_df, 'HDL_H.txt')
 
-def merge_all_data(dir_prefix, files, df):
+def merge_all_data(dir_prefix, files, df, dummy_run=False):
     debug = False
     count = 0
     start = 60
@@ -193,6 +194,9 @@ def merge_all_data(dir_prefix, files, df):
         # print(f"Merging: {f}")
         df = read_and_merge_data(dir_prefix, f, df)
         count += 1
+
+    if dummy_run:
+        return df.head(1000)
     return df
 
 
@@ -212,7 +216,7 @@ def impute_mean(df):
     return new_df
 
 
-def drop_interpolate(df):
+def drop_interpolate(df, reduce_feature_set=True):
     # Drop all values where eligstat != 1
     # nhanes_2013_df = nhanes_2013_df.drop(nhanes_2013_df[nhanes_2013_df['eligstat'] != 1].index)
     df.drop(df[df['eligstat'] != 1].index, inplace=True)
@@ -221,8 +225,11 @@ def drop_interpolate(df):
     # nhanes_2013_df = nhanes_2013_df.dropna(axis=1, how='all')
     df.dropna(axis=1, how='all', inplace=True)
 
-    # Keep only the top 50 important features
-    df = df[top50_features]
+    df = filter_unhealthy_people(df)
+
+    # Keep only the top N important features plus seqn & mortstat
+    if reduce_feature_set:
+        df = df[top_n_features.append(pd.Series(['seqn', 'mortstat']))]
 
     # TODO - look at whether dropping object-type columns can be avoided
     df = df.select_dtypes(exclude=['object'])
@@ -254,11 +261,18 @@ def smote_classify(X, y):
     return X_res, y_res
 
 
-def train_model(df, smote=False):
+def train_model(df, smote=False, sickness_oversample=False):
     # Drop predictor dependent columns from training set
-    train_cols_to_drop = ['seqn', 'mortstat', 'ucod_leading', 'permth_int', 'permth_exm', 'diabetes',
+    train_cols_to_drop = ['ucod_leading', 'permth_int', 'permth_exm', 'diabetes',
                           'hyperten']
-    X = df.drop(labels=train_cols_to_drop, axis=1)
+    sickness_cols = ['rxduse_rxq_rx_h', 'rxddrug_rxq_rx_h', 'rxddrgid_rxq_rx_h', 'rxqseen_rxq_rx_h', 'rxddays_rxq_rx_h',
+                     'rxdrsc1_rxq_rx_h', 'rxdrsc2_rxq_rx_h', 'rxdrsc3_rxq_rx_h', 'rxdrsd1_rxq_rx_h', 'rxdrsd2_rxq_rx_h',
+                     'rxdrsd3_rxq_rx_h', 'rxdcount_rxq_rx_h', ]
+
+    if set(train_cols_to_drop).issubset(df.columns):
+        X = df.drop(labels=train_cols_to_drop, axis=1)
+    else:
+        X = df.drop(labels=['mortstat', 'seqn'], axis=1)
     y = df['mortstat']
 
     # Split first - random state was 123
@@ -266,14 +280,35 @@ def train_model(df, smote=False):
 
     if smote:
         X_smote, y_smote = smote_classify(X_train, y_train)
+    elif sickness_oversample:
+        meds_file = 'RXQ_RX_H.txt'
+        # Join X_test to end of X_train - i.e. df['mortstat']
+        # Then merge in the # of meds file
+        # Then resplit
+        X_comb = pd.concat([X_train, y_train], axis=1)
+        print(f"X_comb shape before oversample: {X_comb.shape}")
+        X_comb = read_and_merge_data('nhanes-2013-questionnaire/', 'RXQ_RX_H.txt', X_comb)
+        X_smote = X_comb.drop(labels=['mortstat'], axis=1)
+        # Drop the cols just added
+        X_smote = X_smote.drop(labels=sickness_cols, axis=1)
+        y_smote = X_comb['mortstat']
+        print(f"X_comb shape after oversample: {X_comb.shape}")
     else:
         X_smote, y_smote = (X_train, y_train)
 
-    tree_clf = DecisionTreeClassifier(criterion=_hyper['criterion'], max_depth=_hyper['max_depth'])
-    tree_clf.fit(X_smote, y_smote)
+    return X, y, X_smote, X_test, y_smote, y_test
 
-    estimator = tree_clf
-    return estimator, X_train, X_test, y_train, y_test
+
+def prefix_from_full_key(key):
+    feat_prefix_pat = re.compile('([a-zA-Z0-9]+)')
+    key_text = feat_prefix_pat.search(key)
+    prefix = key_text.group(1)
+    return prefix
+
+
+def codebook_desc_from_full_key(key):
+    prefix = prefix_from_full_key(key)
+    return codebooks_dict[prefix]
 
 
 def get_feature_names(X_train):
@@ -378,23 +413,40 @@ def bagging_classifier(X_train, y_train, X_test, y_test):
     train_accuracy = bagged_tree.score(X_train, y_train)
     test_accuracy = bagged_tree.score(X_test, y_test)
     print(f"Bagging classifier - train accuracy: {train_accuracy}  test_accuracy: {test_accuracy}")
+    return bagged_tree
 
 
 def random_forest_classifier(X_train, y_train, X_test, y_test):
-    forest = RandomForestClassifier(n_estimators=100, max_depth=5)
+    forest = RandomForestClassifier(n_estimators=100,
+                                    criterion=_hyper['criterion'],
+                                    max_depth=_hyper['max_depth'],
+                                    min_samples_split=_hyper['min_samples_split'])
     forest.fit(X_train, y_train)
-
+    test_pred = forest.predict(X_test)
     # Training & testing accuracy score
     train_accuracy = forest.score(X_train, y_train)
     test_accuracy = forest.score(X_test, y_test)
     print(f"Random forest classifier - train accuracy: {train_accuracy}  test_accuracy: {test_accuracy}")
+
+    # Confusion matrix
+    cm = confusion_matrix(y_test, test_pred)
+    print(cm)
+    print(classification_report(y_test, test_pred))
+
     return forest
 
 
 def yb_classification_report(note, tree_clf, X_test, y_test):
     print(note)
-    visualizer = yb_class_report(tree_clf, X_test, y_test)
+
+    visualizer = ClassificationReport(tree_clf)
+
+    visualizer.score(X_test, y_test)
     visualizer.show()
+
+    # visualizer = yb_class_report(tree_clf, X_test, y_test)
+    # visualizer.score(X_test, y_test)
+    # visualizer.show()
 
 
 def grid_search(X_train, y_train):
@@ -416,6 +468,7 @@ def grid_search(X_train, y_train):
 
 
 def forest_feature_importance(forest, X_train):
+    top_n = 100
     importances = forest.feature_importances_
     std = np.std([tree.feature_importances_ for tree in forest.estimators_],
                  axis=0)
@@ -424,8 +477,9 @@ def forest_feature_importance(forest, X_train):
     # Print the feature ranking
     print("Feature ranking:")
 
-    for f in range(X_train.shape[1]):
-        print("%d. feature %d (%f)" % (f + 1, indices[f], importances[indices[f]]))
+    # for f in range(X_train.shape[1]):
+    for f in range(top_n):
+        print(f"{f + 1}. feature {indices[f]} {importances[indices[f]]} desc: {codebooks_dict[indices[f]]}")
 
     # Plot the feature importances of the forest
     plt.figure()
@@ -437,11 +491,21 @@ def forest_feature_importance(forest, X_train):
     plt.show()
 
 
+def get_desc(row):
+    return codebook_desc_from_full_key(row.name)
+
+
 def forest_feature_importance_v2(forest, X_train):
     feature_importances = pd.DataFrame(forest.feature_importances_,
                                        index=X_train.columns,
                                        columns=['importance']).sort_values('importance', ascending=False)
-    print(tabulate(feature_importances, headers='keys', tablefmt='psql'))
+    feature_importances['desc'] = feature_importances.apply(get_desc, axis=1)
+
+    topn_features = feature_importances.head(50)
+    print(tabulate(topn_features, headers='keys', tablefmt='psql'))
+    topn_features.to_csv("topNFeatures.tsv", sep='\t')
+
+    return topn_features
 
 
 def log_regress(X_train, y_train, X_test, y_test):
@@ -486,35 +550,165 @@ def xg_boost(X_train, y_train, X_test, y_test):
     print("Precision = {}".format(precision_score(y_test, best_preds, average='macro')))
     print("Recall = {}".format(recall_score(y_test, best_preds, average='macro')))
     print("Accuracy = {}".format(accuracy_score(y_test, best_preds)))
+    # yb_classification_report("XG Boost", model, X_test, y_test)
+
+    # Confusion matrix
+    cm = confusion_matrix(y_test, (best_preds > 0.5))
+    print(cm)
+    print(classification_report(y_test, (best_preds > 0.5)))
+    return model
 
 
-steps = 20  # The number of training iterations
-def main():
-    # global nhanes_2013_df
+def plot_correlation(labels, corr):
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # cmap=sn.diverging_palette(20, 220, n=200),
+    sns_ax = sn.heatmap(
+        corr,
+        vmin=-1, vmax=1, center=0,
+        square=True,
+        # annot=True,
+        xticklabels=[codebooks_dict[prefix_from_full_key(k)][0:20] for k in labels],
+        yticklabels=[codebooks_dict[prefix_from_full_key(k)][0:20] for k in labels],
+        ax=ax
+    )
+    sns_ax.set_xticklabels(
+        sns_ax.get_xticklabels(),
+        rotation=45,
+        horizontalalignment='right',
+        fontsize=8
+    );
+    sns_ax.set_yticklabels(
+        sns_ax.get_yticklabels(),
+        fontsize=8
+    );
+    plt.show()
+
+
+def correlation_heatmap(df, topn_features):
+    features_to_show = 50
+    corr = df[topn_features[0:features_to_show]].corr()
+
+    # Zero out correlations less than 0.75
+    corr[corr < 0.75] = 0
+    labels = topn_features[0:features_to_show]
+    plot_correlation(labels, corr)
+
+
+def correlation_with_dependent(X, y, file):
+    # TODO find variables that contain all of the mortstat=1 values but reduce the sample size
+    # One way run a one-level decision tree for each column in X, and chose the variable and cut point
+    # with the lowest class==0 impurity -- i.e. all the class==1 nodes are in one leaf
+    """
+    cor = X.corrwith(y, axis=0)
+    print(type(cor))
+    cor = cor.rename_axis('correlation')
+    cor = cor.sort_values()
+    print(cor)
+    """
+    'class_weight={0: 0.9, 1: 0.1}, '
+    dir = "correlations/"
+    tree_clf = DecisionTreeClassifier(criterion='gini', max_depth=1,
+                                      min_samples_split=2, max_features=len(X.columns),
+                                      class_weight={0: 0.1, 1: 0.9}, )
+    tree_clf.fit(X, y)
+
+    pred = tree_clf.predict(X)
+    # Confusion matrix and classification report
+    print("Correlation with dependent tree")
+    print(confusion_matrix(y, pred))
+    print(classification_report(y, pred))
+
+    y_score = tree_clf.score(X, y)
+    print('Accuracy: ', y_score)
+
+    micro_precision = precision_score(pred, y, average='micro')
+    print('Micro-averaged precision score: {0:0.2f}'.format(
+        micro_precision))
+
+    macro_precision = precision_score(pred, y, average='macro')
+    print('Macro-averaged precision score: {0:0.2f}'.format(
+        macro_precision))
+
+    per_class_precision = precision_score(pred, y, average=None)
+    print('Per-class precision score:', per_class_precision)
+
+    path = tree_clf.cost_complexity_pruning_path(X, y)
+    ccp_alphas, impurities = path.ccp_alphas, path.impurities
+    print(f"Impurities: {path.impurities}")
+
+    create_png(dir + file, X, tree_clf)
+
+
+def correlation_by_indiv_indep_with_dep(X, y):
+    count = 0
+
+    for f in X.columns:
+        # first col
+        train = pd.DataFrame(X[f])
+        print(f"{f} correlation with dependent")
+        correlation_with_dependent(train, y, f"corr-{f}")
+
+
+def filter_unhealthy_people(dt):
+    return dt[(dt['pfq020_pfq_h'] == 1) | (dt['pfq030_pfq_h'] == 1) |
+              (dt['pfq049_pfq_h'] == 1) |
+              (dt['pfq051_pfq_h'] == 1) | (dt['pfq054_pfq_h'] == 1) |
+              (dt['pfq057_pfq_h'] == 1) |
+              (dt['pfq061a_pfq_h'] == 1) |
+              (dt['pfq061b_pfq_h'] == 1) |
+              (dt['pfq061c_pfq_h'] == 1) |
+              (dt['pfq061d_pfq_h'] == 1) |
+              (dt['pfq061e_pfq_h'] == 1) |
+              (dt['pfq061f_pfq_h'] == 1) |
+              (dt['pfq061g_pfq_h'] == 1) |
+              (dt['pfq061h_pfq_h'] == 1) |
+              (dt['pfq061i_pfq_h'] == 1) |
+              (dt['pfq061j_pfq_h'] == 1) |
+              (dt['pfq061k_pfq_h'] == 1) |
+              (dt['pfq061l_pfq_h'] == 1) |
+              (dt['pfq061m_pfq_h'] == 1) |
+              (dt['pfq061n_pfq_h'] == 1) |
+              (dt['pfq061o_pfq_h'] == 1) |
+              (dt['pfq061p_pfq_h'] == 1) |
+              (dt['pfq061q_pfq_h'] == 1) |
+              (dt['pfq061r_pfq_h'] == 1) |
+              (dt['pfq061s_pfq_h'] == 1) |
+              (dt['pfq061t_pfq_h'] == 1) |
+              (dt['pfq063a_pfq_h'] == 1) |
+              (dt['pfq063b_pfq_h'] == 1) |
+              (dt['pfq063c_pfq_h'] == 1) |
+              (dt['pfq063d_pfq_h'] == 1) |
+              (dt['pfq063e_pfq_h'] == 1) |
+              (dt['pfq090_pfq_h'] == 1)
+              ]
+
+
+def just_read():
     hanes_2013_dir = 'nhanes-2013/'
     hanes_2013_questionnaire_dir = 'nhanes-2013-questionnaire/'
 
     mort_df = read_mortality_data()
+    mort_df.set_index('seqn')
+    print(f"Mortality data: {mort_df.shape}")
     nhanes_2013_df = merge_all_data(hanes_2013_dir, hanes_2013_files, mort_df)
     nhanes_2013_df = merge_all_data(hanes_2013_questionnaire_dir, hanes_2013_questionnaire_files, nhanes_2013_df)
+    # nhanes_2013_df = merge_all_data(hanes_2013_questionnaire_dir, ['PFQ_H.txt'], mort_df)
 
     # print(tabulate(nhanes_2013_df, headers='keys', tablefmt='psql'))
     # print(nhanes_2013_df.dtypes)
 
     print(f"After merge: {nhanes_2013_df.shape}")
 
-    nhanes_2013_df = drop_interpolate(nhanes_2013_df)
+    nhanes_2013_df = drop_interpolate(nhanes_2013_df, reduce_feature_set=False)
 
     print(f"After drop: {nhanes_2013_df.shape}")
-
-    tree_clf, X_train, X_test, y_train, y_test = train_model(nhanes_2013_df, smote=True)
-
-    # Ran grid search already
-    # grid_search(X_train, y_train)
+    return nhanes_2013_df
 
 
-    print(f"Len of full data frame: {len(nhanes_2013_df)}")
-    print(f"Len of X_train: {len(X_train)} len of X_test: {len(X_test)}")
+def single_tree(X_train, X_test, y_train, y_test):
+    tree_clf = DecisionTreeClassifier(criterion=_hyper['criterion'], max_depth=_hyper['max_depth'])
+    tree_clf.fit(X_train, y_train)
 
     # Train set predictions
     print("*** Training: ***")
@@ -535,18 +729,86 @@ def main():
     print_test_tree("train_tree.dot", "test_tree.png", X_test, y_test, tree_clf)
     print(f"Len of X_train: {len(X_train)} len of X_test: {len(X_test)}")
 
-    # log_regress(X_train, y_train, X_test, y_test)
-    xg_boost(X_train, y_train, X_test, y_test)
 
-    random_forest = False
-    if random_forest:
-        bagging_classifier(X_train, y_train, X_test, y_test)
-        forest = random_forest_classifier(X_train, y_train, X_test, y_test)
+def plot_poisson():
+    from scipy.stats import poisson
+    data_poisson = poisson.rvs(mu=3, size=10000)
+    X = np.arange(80, 120)
 
-        # Ran once
-        # forest_feature_importance_v2(forest, X_train)
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+    fig.suptitle("Poisson distribution of Sickness", fontsize=16)
+    # ax.axis('off')
+    # Turn off tick labels
+    ax.set_yticklabels([])
+    ax.set_xticklabels([])
+    plt.plot(X, poisson.pmf(X, 80), 'r-')
+    ax.set_xlabel('Sickness')
+    ax.set_ylabel('Number of people')
+    plt.savefig("sickness.png")
 
-        yb_classification_report("Forest classification", forest, X_test, y_test)
 
+def main(dummy_run=False):
+    # global nhanes_2013_df
+    hanes_2013_dir = 'nhanes-2013/'
+    hanes_2013_questionnaire_dir = 'nhanes-2013-questionnaire/'
+
+    mort_df = read_mortality_data()
+
+    nhanes_2013_df = merge_all_data(hanes_2013_dir, hanes_2013_files, mort_df, dummy_run)
+    nhanes_2013_df = merge_all_data(hanes_2013_questionnaire_dir, hanes_2013_questionnaire_files, nhanes_2013_df,
+                                    dummy_run)
+
+    # print(tabulate(nhanes_2013_df, headers='keys', tablefmt='psql'))
+    # print(nhanes_2013_df.dtypes)
+
+    print(f"After merge: {nhanes_2013_df.shape}")
+
+    nhanes_2013_df = drop_interpolate(nhanes_2013_df)
+
+    print(f"After drop: {nhanes_2013_df.shape}")
+
+    ActionEnum = Enum('Action', ['feature_importance', 'feature_correlation', 'single_tree',
+                                 'xg_boost', 'random_forest', 'logistic', 'grid_search'])
+    action = ActionEnum.single_tree
+
+    X, y, X_train, X_test, y_train, y_test = train_model(nhanes_2013_df, smote=True, sickness_oversample=False)
+
+    print(f"Total number of seqn: {len(nhanes_2013_df)}")
+    print(f"Len of X_train: {len(X_train)} len of X_test: {len(X_test)}")
+    print(f"Test set # of deaths: {sum(y_test)}")
+
+    if action == ActionEnum.feature_correlation:
+        correlation_by_indiv_indep_with_dep(X, y)
+        # correlation_heatmap(X_train, top_n_features)
+    elif action == ActionEnum.single_tree:
+        single_tree(X_train, X_test, y_train, y_test)
+    elif action == ActionEnum.feature_importance:
+        forest = RandomForestClassifier(n_estimators=100,
+                                        criterion=_hyper['criterion'],
+                                        max_depth=_hyper['max_depth'],
+                                        min_samples_split=_hyper['min_samples_split'])
+        print("Training the forrest over the whole dataframe, length: {len(X}")
+        forest.fit(X, y)
+        # For feature importance train & test on the whole frame
+        forest_feature_importance_v2(forest, X)
+    elif action == ActionEnum.random_forest:
+        # bagging = bagging_classifier(X_train, y_train, X_test, y_test)
+        for i in range(3):
+            forest = random_forest_classifier(X_train, y_train, X_test, y_test)
+            yb_classification_report("Forest classification", forest, X_test, y_test)
+    elif action == ActionEnum.xg_boost:
+        clf = xg_boost(X_train, y_train, X_test, y_test)
+        """
+        model = clf.XGBClassifier()
+        kfold = KFold(n_splits=10, random_state=7)
+        dt_cv_score = cross_val_score(clf, X_train, y_train, cv=kfold)
+        mean_dt_cv_score = np.mean(dt_cv_score)
+        print(f"Mean Cross Validation Score: {mean_dt_cv_score :.2%}")
+        """
+    elif action == ActionEnum.logistic:
+        log_regress(X_train, y_train, X_test, y_test)
+    elif action == ActionEnum.grid_search:
+        grid_search(X_train, y_train)
 
 main()
+# just_read()
